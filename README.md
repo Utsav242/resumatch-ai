@@ -11,6 +11,27 @@
 
 ---
 
+## 🛠️ Technology Stack Breakdown
+
+| Layer | Category | Technology Used | Version / Description |
+| :--- | :--- | :--- | :--- |
+| **Frontend (FE)** | **Framework** | Next.js (App Router) | `15.1.0` (React 19) |
+| | **Language** | TypeScript | `^5.4.3` |
+| | **Styling & UI** | Tailwind CSS + Lucide Icons | `^3.4.1` / `^0.474.0` |
+| | **State & Fetching** | TanStack Query | `^5.28.9` (`@tanstack/react-query`) |
+| | **Form & Validation** | React Hook Form + Zod | `^7.51.1` / `^3.22.4` |
+| **Backend (BE)** | **Framework** | FastAPI (Async REST API) | `^0.110.0` |
+| | **Language** | Python | `3.12+` |
+| | **Database & ORM** | PostgreSQL 16 + SQLAlchemy | `2.0+` Async (`asyncpg`) |
+| | **DB Migrations** | Alembic | `^1.13.1` |
+| | **Config & Validation**| Pydantic v2 | `pydantic-settings` |
+| | **Logging & Linting** | Structlog + Ruff | Structured JSON Logging & Ruff |
+| | **Testing Suite** | Pytest + HTTPX Async | `pytest-asyncio` / `anyio` |
+| **DevOps & Infra** | **Containers** | Docker & Docker Compose | Multi-stage Dockerfiles |
+| | **CI/CD Pipeline** | GitHub Actions | Automated Lint & Build pipeline |
+
+---
+
 ## 🏗️ Monorepo Directory Architecture
 
 > 📖 For a comprehensive folder-by-folder breakdown and setup guide, see [MONOREPO_SETUP.md](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/MONOREPO_SETUP.md).
