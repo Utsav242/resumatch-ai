@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "resumatch-backend"
+version = "0.1.0"
+description = "ResumeMatch AI FastAPI Backend Service"
+authors = ["ResumeMatch Team"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
