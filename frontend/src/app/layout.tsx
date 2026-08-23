@@ -1,29 +1,77 @@
 import type { Metadata } from "next";
+import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
+import { ThemeProvider } from "@/context/ThemeProvider";
+import { MuiThemeRegistry } from "@/components/providers/MuiThemeRegistry";
 import "./globals.css";
-import Providers from "./providers";
-import { Header } from "@/components/common/Header";
-import { Footer } from "@/components/common/Footer";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+  fallback: ["system-ui", "-apple-system", "sans-serif"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+  fallback: ["system-ui", "sans-serif"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+  fallback: ["monospace", "Courier New"],
+});
 
 export const metadata: Metadata = {
-  title: "ResumeMatch AI - Enterprise AI Resume Intelligence Platform",
+  title: "Resumiq — AI-Powered Resume & Job Match Intelligence",
   description:
-    "AI-powered Resume Intelligence Platform analyzing resumes against Job Descriptions using RAG, ATS scoring, and LLMs.",
+    "Analyze and optimize your resume against target job postings using vector embeddings. Beat ATS filters and triple your interview callbacks.",
+  keywords: [
+    "Resumiq",
+    "Resumiq AI",
+    "ATS Scanner",
+    "AI Resume Rewriter",
+    "Job Matching Engine",
+    "Vector Similarity",
+  ],
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen flex flex-col bg-slate-950 text-slate-100 font-sans antialiased">
-        <Providers>
-          <Header />
-          <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">{children}</main>
-          <Footer />
-        </Providers>
-      </body>
-    </html>
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: "#6D5EF7",
+          colorBackground: "var(--bg-elevated)",
+          colorForeground: "var(--text-primary)",
+          colorMutedForeground: "var(--text-secondary)",
+          colorBorder: "var(--border)",
+          colorInputForeground: "var(--text-primary)",
+          colorInput: "var(--bg)",
+          borderRadius: "0.75rem",
+        },
+      }}
+    >
+      <html
+        lang="en"
+        className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+        data-theme="dark"
+        suppressHydrationWarning
+      >
+        <body className="min-h-screen bg-bg text-text-primary antialiased">
+          <ThemeProvider defaultTheme="dark">
+            <MuiThemeRegistry>{children}</MuiThemeRegistry>
+          </ThemeProvider>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

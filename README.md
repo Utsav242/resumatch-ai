@@ -1,4 +1,4 @@
-# ResumeMatch AI — Enterprise AI Resume Intelligence Platform
+# Resumiq — Enterprise AI Resume Intelligence Platform
 
 [![Build & Lint CI](https://github.com/resumatch-ai/resumatch-ai/actions/workflows/ci.yml/badge.svg)](.github/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688.svg?style=flat&logo=FastAPI)](https://fastapi.tiangolo.com/)
@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6.svg?style=flat&logo=typescript)](https://typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.0-4169E1.svg?style=flat&logo=postgresql)](https://postgresql.org/)
 
-**ResumeMatch AI** is a production-ready AI Resume Intelligence Platform that analyzes resumes against Job Descriptions using RAG (Retrieval-Augmented Generation), ATS scoring, and Large Language Models.
+**Resumiq** is a production-ready AI Resume Intelligence Platform that analyzes resumes against Job Descriptions using RAG (Retrieval-Augmented Generation), ATS scoring, and Large Language Models.
 
 ---
 

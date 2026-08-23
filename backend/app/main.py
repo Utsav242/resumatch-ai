@@ -14,12 +14,12 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown lifespan context manager."""
     setup_logging()
     logger.info(
-        "ResumeMatch AI Backend initializing...",
+        "Resumiq AI Backend initializing...",
         environment=settings.ENVIRONMENT,
         version=settings.VERSION,
     )
     yield
-    logger.info("ResumeMatch AI Backend shutting down...")
+    logger.info("Resumiq AI Backend shutting down...")
 
 
 app = FastAPI(

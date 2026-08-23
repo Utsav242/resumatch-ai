@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "resumatch-backend"
 version = "0.1.0"
-description = "ResumeMatch AI FastAPI Backend Service"
-authors = ["ResumeMatch Team"]
+description = "Resumiq FastAPI Backend Service"
+authors = ["Resumiq Team"]
 
 [tool.ruff]
 line-length = 100
