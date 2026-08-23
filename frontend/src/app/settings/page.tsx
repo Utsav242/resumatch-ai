@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import React, { useState, useEffect } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Container,
   Box,
@@ -13,35 +14,115 @@ import {
   Button,
   Switch,
   FormControlLabel,
-  Divider,
   Paper,
   Alert,
   Snackbar,
   Chip,
+  CircularProgress,
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
 import PersonIcon from "@mui/icons-material/Person";
 import TuneIcon from "@mui/icons-material/Tune";
 import SecurityIcon from "@mui/icons-material/Security";
 import { AppNav } from "@/components/common/AppNav";
+import { ApiService } from "@/services/api";
 
 export default function SettingsPage(): React.JSX.Element {
   const { user } = useUser();
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const { data: dbUser, isLoading } = useQuery({
+    queryKey: ["currentUserProfile"],
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+      return ApiService.fetchCurrentUser(token);
+    },
+  });
 
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || "Alex",
-    lastName: user?.lastName || "Rivera",
-    targetRole: "Staff AI Infrastructure Architect",
-    targetIndustry: "Artificial Intelligence / SaaS",
+    firstName: "",
+    lastName: "",
+    targetRole: "",
+    targetIndustry: "",
     enableRAG: true,
     strictATS: true,
     emailNotifications: true,
   });
+  useEffect(() => {
+    if (dbUser) {
+      setFormData({
+        firstName: dbUser.first_name || user?.firstName || "",
+        lastName: dbUser.last_name || user?.lastName || "",
+        targetRole: dbUser.target_role || "",
+        targetIndustry: dbUser.target_industry || "",
+        enableRAG: dbUser.enable_rag,
+        strictATS: dbUser.strict_ats,
+        emailNotifications: dbUser.email_notifications,
+      });
+    }
+  }, [dbUser, user?.firstName, user?.lastName]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (updatedData: typeof formData) => {
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+
+      await ApiService.updateCurrentUser(token, {
+        first_name: updatedData.firstName,
+        last_name: updatedData.lastName,
+        target_role: updatedData.targetRole,
+        target_industry: updatedData.targetIndustry,
+        enable_rag: updatedData.enableRAG,
+        strict_ats: updatedData.strictATS,
+        email_notifications: updatedData.emailNotifications,
+      });
+
+      if (
+        user &&
+        (updatedData.firstName !== user.firstName ||
+          updatedData.lastName !== user.lastName)
+      ) {
+        await user.update({
+          firstName: updatedData.firstName,
+          lastName: updatedData.lastName,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["currentUserProfile"] });
+      setSavedSuccess(true);
+    },
+    onError: (err: Error) => {
+      setErrorMessage(err.message || "Failed to save preferences.");
+    },
+  });
 
   const handleSave = () => {
-    setSavedSuccess(true);
+    setErrorMessage("");
+    updateMutation.mutate(formData);
   };
+
+  if (isLoading) {
+    return (
+      <Box sx={{ minHeight: "100vh", backgroundColor: "background.default" }}>
+        <AppNav />
+        <Container
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            height: "80vh",
+          }}
+        >
+          <CircularProgress color="primary" />
+        </Container>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "background.default", pb: 8 }}>
@@ -209,13 +290,22 @@ export default function SettingsPage(): React.JSX.Element {
             </Card>
           </Grid>
         </Grid>
-
         <Snackbar
           open={savedSuccess}
           autoHideDuration={3000}
           onClose={() => setSavedSuccess(false)}
           message="Preferences saved successfully!"
         />
+
+        <Snackbar
+          open={!!errorMessage}
+          autoHideDuration={4000}
+          onClose={() => setErrorMessage("")}
+        >
+          <Alert severity="error" onClose={() => setErrorMessage("")} sx={{ width: "100%" }}>
+            {errorMessage}
+          </Alert>
+        </Snackbar>
       </Container>
     </Box>
   );

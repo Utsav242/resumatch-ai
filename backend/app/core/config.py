@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = "mock_key"
     HUGGINGFACE_TOKEN: str = "mock_token"
 
+    # Clerk Authentication
+    CLERK_JWKS_URL: str = "https://fit-hornet-1.clerk.accounts.dev/.well-known/jwks.json"
+    CLERK_API_URL: str = "https://api.clerk.com/v1"
+    CLERK_SECRET_KEY: str = "sk_test_1NgErj2WpkqyenjACnak3ud0gEIfuGpkAFKq27bBti"
+
+
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )
