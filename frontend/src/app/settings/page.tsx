@@ -14,7 +14,6 @@ import {
   Button,
   Switch,
   FormControlLabel,
-  Divider,
   Paper,
   Alert,
   Snackbar,
