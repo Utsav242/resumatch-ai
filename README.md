@@ -20,11 +20,13 @@
 | | **Styling & UI** | Tailwind CSS + Lucide Icons | `^3.4.1` / `^0.474.0` |
 | | **State & Fetching** | TanStack Query | `^5.28.9` (`@tanstack/react-query`) |
 | | **Form & Validation** | React Hook Form + Zod | `^7.51.1` / `^3.22.4` |
+| | **Authentication** | Clerk Auth | `@clerk/nextjs` v7.6.4 |
 | **Backend (BE)** | **Framework** | FastAPI (Async REST API) | `^0.110.0` |
 | | **Language** | Python | `3.12+` |
 | | **Database & ORM** | PostgreSQL 16 + SQLAlchemy | `2.0+` Async (`asyncpg`) |
 | | **DB Migrations** | Alembic | `^1.13.1` |
 | | **Config & Validation**| Pydantic v2 | `pydantic-settings` |
+| | **Authentication** | PyJWT + Cryptography | RS256 JWKS validation |
 | | **Logging & Linting** | Structlog + Ruff | Structured JSON Logging & Ruff |
 | | **Testing Suite** | Pytest + HTTPX Async | `pytest-asyncio` / `anyio` |
 | **DevOps & Infra** | **Containers** | Docker & Docker Compose | Multi-stage Dockerfiles |
@@ -126,14 +128,23 @@ npm run dev
 ### Frontend Verification
 ```bash
 cd frontend
-npm run lint
-npx tsc --noEmit
+npm run lint      # Lint styles and checks
+npx tsc --noEmit  # TypeScript typecheck
+npm run test      # Run Jest unit tests
 ```
 
 ### Backend Verification
 ```bash
 cd backend
-ruff check .
+ruff check .      # Python linting
+mypy .            # Python static typechecking
+pytest            # Run Pytest unit tests
+```
+
+### Running Tests in Docker
+```bash
+# Run backend test suite inside container
+docker compose exec backend pytest
 ```
 
 ---
