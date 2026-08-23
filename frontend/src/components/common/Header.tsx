@@ -10,7 +10,7 @@ export function Header() {
             <Sparkles className="w-5 h-5" />
           </div>
           <span className="font-bold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-            ResumeMatch<span className="text-blue-500">.AI</span>
+            Resum<span className="text-blue-500">iq</span>
           </span>
         </Link>
 

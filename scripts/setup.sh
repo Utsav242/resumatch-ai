@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-echo "🚀 Initializing ResumeMatch AI Monorepo Environment..."
+echo "🚀 Initializing Resumiq Monorepo Environment..."
 
 if [ ! -f .env ]; then
     echo "📋 Copying .env.example to .env..."
