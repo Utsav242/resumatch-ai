@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,7 @@ async def paste_job_description(
     # 1. Fetch user's active resume or specified resume by ID
     if payload.resume_id:
         import uuid
+
         try:
             resume_uuid = uuid.UUID(payload.resume_id)
             stmt = select(Resume).where(Resume.user_id == current_user.id, Resume.id == resume_uuid)
@@ -75,9 +76,7 @@ async def paste_job_description(
 
     # 3. Deactivate previous resumes/scans
     deactivate_stmt = (
-        update(Resume)
-        .where(Resume.user_id == current_user.id)
-        .values(is_active=False)
+        update(Resume).where(Resume.user_id == current_user.id).values(is_active=False)
     )
     await db.execute(deactivate_stmt)
 

@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -132,7 +132,7 @@ async def delete_resume(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Delete a specific resume by ID for the authenticated user and promote another active version if necessary."""
+    """Delete a specific resume by ID and promote another active version if needed."""
     # 1. Fetch the target resume to delete
     stmt = select(Resume).where(Resume.user_id == current_user.id, Resume.id == resume_id)
     result = await db.execute(stmt)
