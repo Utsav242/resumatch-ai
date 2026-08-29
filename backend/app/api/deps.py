@@ -108,4 +108,3 @@ async def get_current_user(
                 ) from e
 
     return user
-

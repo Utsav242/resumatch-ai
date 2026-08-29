@@ -24,6 +24,10 @@
 * **Authentication UI:** Custom Clerk auth cards inside [AuthCard.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/components/auth/AuthCard.tsx) supporting Google OAuth redirects and email OTP verification.
 * **Route Protection:** Built-in edge router guards in [middleware.ts](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/middleware.ts) redirecting unauthenticated sessions away from `/dashboard` sub-paths.
 * **User Settings Dashboard:** Integrated a profile configuration page in [page.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/app/settings/page.tsx) to adjust target roles, domains, and ATS options, synced to the backend via mutations.
+* **Candidate Dashboard & Upload Match:** Clean, multi-step upload interface displaying real-time parsing animations. Shows matching score, status badges (Active/Archived), and date scanned.
+* **Scan History & Version Analytics:** Full historical dashboard table of resume versions and associated job parameters with full text previews and side-by-side versions comparison.
+* **Re-upload & Target Parameter Pre-filling:** Automatically restores the historical resume file metadata and pre-fills target role, company name, and job description fields.
+* **Scan Deletion Confirmation:** Interactive confirm modal to safely remove specific resume scans with real-time UI refresh.
 
 ---
 
@@ -32,6 +36,9 @@
 * **Dependency Injection:** Configured `get_current_user` in [deps.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/api/deps.py) to authenticate incoming API routes and auto-register new profiles in PostgreSQL on-the-fly.
 * **REST Endpoints:** Exposed versioned `/users/me` routes (GET & PUT) to query and modify current user settings.
 * **System Health Check:** Exposed dynamic health monitoring.
+* **Multi-Format Parsers:** Implemented robust extraction pipelines for PDF and DOCX resume documents.
+* **Active Version Promotion:** Automated database-level versioning hierarchy where only one resume is active at a time, with fallback promotion logic on record deletion.
+* **Version History Persistence:** Expanded SQL schemas for job descriptions, target roles, and companies, supporting decoupled version copies.
 
 ---
 
@@ -42,8 +49,47 @@
 ---
 
 ## 📈 Current Project Status
-* **Completed Areas:** Monorepo architecture setup, PostgreSQL container configurations, Clerk Auth frontend & backend JWT integration, settings page state synchronization, and comprehensive unit tests (9/9 passing tests).
-* **Next Implementation Steps:** Phase 3 — Resume and Job Description file upload pipelines, document chunking parsers, and initial FAISS vector index configuration.
+
+### Monorepo Milestone Verification Checkpoint (Phases 1, 2, & 3)
+
+Below is the verified implementation status for the foundational phases of Resumiq:
+
+| Phase / Task | Status | Details & Verification Links |
+| :--- | :---: | :--- |
+| **Phase 1 — Project Foundation** | | |
+| 1. Initialize GitHub monorepo structure | ✅ | Core directories (`backend`, `frontend`, `docker`, `.github`, `scripts`) established in workspace root. |
+| 2. Setup Next.js 16 frontend scaffold | ✅ | Scaffolding configured with Next.js v16 (`next: ^16.2.12`). See [package.json](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/package.json). |
+| 3. Setup FastAPI backend scaffold | ✅ | Scaffolded with dependencies configured in [requirements.txt](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/requirements.txt). |
+| 4. Configure PostgreSQL with Docker Compose | ✅ | PostgreSQL (`postgres:16-alpine`) set up in [docker-compose.yml](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/docker-compose.yml#L4-L24). |
+| 5. Setup Docker Compose (FE, BE, DB, Redis) | ⚠️ | Frontend, backend, and PostgreSQL are fully configured. However, **Redis** is not included in the compose orchestration. See [docker-compose.yml](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/docker-compose.yml). |
+| 6. Configure GitHub Actions CI (lint + test) | ⚠️ | Workflow runs frontend linters, typechecks, and backend linters (Ruff). However, **automated test suites** are not run as part of CI. See [ci.yml](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/.github/workflows/ci.yml). |
+| 7. Setup environment configuration (`.env`, `config.py`) | ✅ | Managed via backend [config.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/core/config.py) and frontend config loaders. |
+| 8. Setup structured logging | ✅ | Standardized using `structlog` backend integration. See [logging.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/core/logging.py). |
+| 9. Setup clean architecture folder structure | ✅ | Folders structured logically. Frontend app router pages/components and backend endpoints/schemas separated. |
+| 10. Enable Swagger / OpenAPI docs | ✅ | Exposed OpenAPI endpoints via FastAPI app initialization. See [main.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/main.py#L28-L30). |
+| **Phase 2 — Authentication & User Management** | | |
+| 11. Setup Clerk account & API keys | ✅ | Configured on frontend via [layout.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/app/layout.tsx#L49-L62) and validated on backend via [config.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/core/config.py#L43-L45). |
+| 12. Design home page | ✅ | Dynamic landing layout configured in [page.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/app/page.tsx). |
+| 13. Configure Clerk Email Verification | ✅ | Implemented in custom email sign-up verification screen. See [AuthCard.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/components/auth/AuthCard.tsx#L123-L126). |
+| 14. Implement sign up flow | ✅ | Customized signup card integrated using Clerk SDK client methods. See [AuthCard.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/components/auth/AuthCard.tsx#L112-L127). |
+| 15. Implement login flow | ✅ | Interactive sign-in layout (Email/Password and Google OAuth). See [AuthCard.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/components/auth/AuthCard.tsx#L95-L111). |
+| 16. Implement protected routes (frontend) | ✅ | Configured route guard patterns on edge router paths using middleware. See [middleware.ts](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/middleware.ts). |
+| 17. Implement JWT verification middleware (backend) | ✅ | Decodes Clerk RS256 JWT tokens using remote JWK keyset retrieval. See [auth.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/core/auth.py#L17-L50). |
+| 18. Create Users table & model | ✅ | Declarative SQLAlchemy class mapping with schema variables. See [user.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/models/user.py) and migrations in `backend/alembic/versions`. |
+| 19. Build user profile page | ✅ | Dynamic state forms updating target roles, ATS modes, and user fields. See [page.tsx](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/app/settings/page.tsx). |
+| 20. Implement session management | ✅ | Authenticated token passes inside HTTP Authorization header wrapper. See [api.ts](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/frontend/src/services/api.ts#L26-L29). |
+| 21. Implement get_current_user dependency | ✅ | Extracts user payload and auto-registers users in database. See [deps.py](file:///home/utsav.goel/Documents/Upskill/resumatch-ai/backend/app/api/deps.py#L27-L110). |
+| **Phase 3 — Parsing, Matching & Versioning** | | |
+| 22. PDF & DOCX resume parser pipelines | ✅ | Parsers extract structured resume sections (summary, experience, skills, etc.) |
+| 23. Resume active/archived versioning database mapping | ✅ | Managed via `is_active` boolean on `resumes` table with automatic promotion. |
+| 24. Pasted job description matching REST APIs | ✅ | Paste endpoint accepts target role, company, and JD text, copying active resume context. |
+| 25. Re-upload flow with parameters pre-filling | ✅ | Fetches specific resume by ID and restores files and text inputs on upload page. |
+| 26. Safe scan deletion API and UI triggers | ✅ | Implemented protected DELETE route and confirmation Dialogs on Dashboard/History. |
+
+* **✅ Fully Implemented**
+* **⚠️ Partially Implemented / Needs Improvement**
+
+* **Next Implementation Steps:** Phase 4 — Semantic Search & Vector Embeddings configuration, initial FAISS index setup, and LLM matching algorithm.
 
 ---
 

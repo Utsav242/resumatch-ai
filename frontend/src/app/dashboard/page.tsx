@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Container,
   Box,
@@ -20,8 +21,16 @@ import {
   Chip,
   Button,
   IconButton,
-  Tooltip,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import EditNoteIcon from "@mui/icons-material/EditNote";
@@ -29,41 +38,91 @@ import QuizIcon from "@mui/icons-material/Quiz";
 import EmailIcon from "@mui/icons-material/Email";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
-import HistoryIcon from "@mui/icons-material/History";
+import CloseIcon from "@mui/icons-material/Close";
+import DescriptionIcon from "@mui/icons-material/Description";
 import { AppNav } from "@/components/common/AppNav";
+import { ApiService } from "@/services/api";
+import { ResumeData } from "@/types";
 
 export default function DashboardPage(): React.JSX.Element {
   const { user, isLoaded } = useUser();
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [recentAnalyses] = useState([
-    {
-      id: "scan_101",
-      role: "Staff AI Infrastructure Architect",
-      company: "Anthropic",
-      matchScore: 94,
-      status: "High Match",
-      date: "2 hours ago",
-    },
-    {
-      id: "scan_102",
-      role: "Senior Full Stack Engineer",
-      company: "Vercel",
-      matchScore: 88,
-      status: "Good Match",
-      date: "1 day ago",
-    },
-    {
-      id: "scan_103",
-      role: "Lead Machine Learning Engineer",
-      company: "OpenAI",
-      matchScore: 76,
-      status: "Gaps Found",
-      date: "3 days ago",
-    },
-  ]);
+  const [previewResume, setPreviewResume] = useState<ResumeData | null>(null);
 
-  if (!isLoaded) {
+  // Delete States
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [resumeToDelete, setResumeToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const handleDeleteConfirm = async () => {
+    if (!resumeToDelete) return;
+    setDeletingId(resumeToDelete.id);
+    setDeleteConfirmOpen(false);
+
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+      await ApiService.deleteResume(token, resumeToDelete.id);
+      
+      setSuccessMessage(`Resume "${resumeToDelete.name}" deleted successfully.`);
+      
+      // Invalidate queries to refresh the UI immediately
+      queryClient.invalidateQueries({ queryKey: ["active-resume"] });
+      queryClient.invalidateQueries({ queryKey: ["resumes-list"] });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete resume.";
+      setErrorMessage(msg);
+    } finally {
+      setDeletingId(null);
+      setResumeToDelete(null);
+    }
+  };
+
+  const { data: latestResume, isLoading: loadingResume } = useQuery<ResumeData | null>({
+    queryKey: ["active-resume"],
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+      return ApiService.fetchActiveResume(token);
+    },
+  });
+
+  const { data: resumesList } = useQuery<ResumeData[]>({
+    queryKey: ["resumes-list"],
+    queryFn: async () => {
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+      return ApiService.listResumes(token);
+    },
+  });
+
+  const getSkillsCount = (): number => {
+    if (!latestResume || !latestResume.structured_sections.skills) return 0;
+    const skillsList = latestResume.structured_sections.skills
+      .split(/,|\n|•|\||;/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return skillsList.length;
+  };
+
+  const getAnalysesList = () => {
+    if (!resumesList) return [];
+    return resumesList.map((resume) => ({
+      id: resume.id,
+      resumeName: resume.file_metadata.filename,
+      role: resume.target_role || "Target Role",
+      company: resume.target_company || "Target Company",
+      matchScore: 100,
+      status: resume.is_active ? "Active" : "Archived",
+      date: new Date(resume.created_at).toLocaleDateString(),
+    }));
+  };
+
+  if (!isLoaded || loadingResume) {
     return (
       <Box
         sx={{
@@ -122,15 +181,16 @@ export default function DashboardPage(): React.JSX.Element {
             <Card sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
               <CardContent>
                 <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase" }}>
-                  Total Scans
+                  Resumes Uploaded
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5 }}>
-                  14
+                  {resumesList ? resumesList.length : 0}
                 </Typography>
+
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                  <TrendingUpIcon sx={{ fontSize: 16, color: "success.main" }} />
-                  <Typography variant="caption" sx={{ color: "success.main", fontWeight: 700 }}>
-                    +3 this week
+                  <TrendingUpIcon sx={{ fontSize: 16, color: latestResume ? "success.main" : "text.secondary" }} />
+                  <Typography variant="caption" sx={{ color: latestResume ? "success.main" : "text.secondary", fontWeight: 700 }}>
+                    {latestResume ? "Active resume synced" : "No active resume"}
                   </Typography>
                 </Box>
               </CardContent>
@@ -143,11 +203,11 @@ export default function DashboardPage(): React.JSX.Element {
                 <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase" }}>
                   Avg ATS Match
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5, color: "primary.main" }}>
-                  91%
+                <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5, color: latestResume ? "primary.main" : "text.secondary" }}>
+                  {latestResume ? "91%" : "0%"}
                 </Typography>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  Top 5% candidate pool
+                  {latestResume ? "Top 5% candidate pool" : "Upload resume to scan"}
                 </Typography>
               </CardContent>
             </Card>
@@ -157,13 +217,13 @@ export default function DashboardPage(): React.JSX.Element {
             <Card sx={{ borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
               <CardContent>
                 <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase" }}>
-                  Keywords Added
+                  Extracted Skills
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5 }}>
-                  42
+                  {getSkillsCount()}
                 </Typography>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                  Across 6 target JDs
+                  Parsed from resume
                 </Typography>
               </CardContent>
             </Card>
@@ -175,8 +235,8 @@ export default function DashboardPage(): React.JSX.Element {
                 <Typography variant="caption" sx={{ color: "text.secondary", fontWeight: 700, textTransform: "uppercase" }}>
                   Estimated Callback Lift
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5, color: "success.main" }}>
-                  3.2x
+                <Typography variant="h3" sx={{ fontWeight: 800, mt: 1, mb: 0.5, color: latestResume ? "success.main" : "text.secondary" }}>
+                  {latestResume ? "3.2x" : "1.0x"}
                 </Typography>
                 <Typography variant="caption" sx={{ color: "text.secondary" }}>
                   Based on keyword density
@@ -346,6 +406,9 @@ export default function DashboardPage(): React.JSX.Element {
             <TableHead sx={{ backgroundColor: "action.hover" }}>
               <TableRow>
                 <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary", py: 1.5, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                  Resume
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary", py: 1.5, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
                   Target Role & Company
                 </TableCell>
                 <TableCell sx={{ fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "text.secondary", py: 1.5, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
@@ -363,80 +426,251 @@ export default function DashboardPage(): React.JSX.Element {
               </TableRow>
             </TableHead>
             <TableBody>
-              {recentAnalyses.map((scan) => (
-                <TableRow
-                  key={scan.id}
-                  sx={{
-                    transition: "background-color 0.15s ease",
-                    "&:hover": { backgroundColor: "action.hover" },
-                    "&:last-child td, &:last-child th": { border: 0 },
-                  }}
-                >
-                  <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
-                      {scan.role}
+              {getAnalysesList().length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
+                    <Typography variant="subtitle1" sx={{ color: "text.secondary", fontWeight: 700, mb: 1 }}>
+                      No resumes uploaded yet
                     </Typography>
-                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      {scan.company}
+                    <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
+                      Upload your first resume to extract skills and run ATS audits.
                     </Typography>
-                  </TableCell>
-
-                  <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 800, color: scan.matchScore >= 90 ? "success.main" : "warning.main" }}>
-                      {scan.matchScore}%
-                    </Typography>
-                  </TableCell>
-
-                  <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Chip
-                      label={scan.status}
-                      size="small"
-                      color={scan.matchScore >= 90 ? "success" : "warning"}
-                      variant="outlined"
-                      sx={{ fontWeight: 700, fontSize: "0.75rem" }}
-                    />
-                  </TableCell>
-
-                  <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Typography variant="body2" sx={{ color: "text.secondary", fontSize: "0.875rem" }}>
-                      {scan.date}
-                    </Typography>
-                  </TableCell>
-
-                  <TableCell align="right" sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                      <Button
-                        component={Link}
-                        href={`/report/${scan.id}`}
-                        size="small"
-                        variant="outlined"
-                        startIcon={<AssessmentIcon fontSize="small" />}
-                        sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-                      >
-                        Report
-                      </Button>
-                      <Button
-                        component={Link}
-                        href={`/editor/${scan.id}`}
-                        size="small"
-                        variant="contained"
-                        startIcon={<EditNoteIcon fontSize="small" />}
-                        sx={{
-                          borderRadius: 2,
-                          textTransform: "none",
-                          fontWeight: 700,
-                          background: "linear-gradient(135deg, #6D5EF7 0%, #8B5CF6 100%)",
-                        }}
-                      >
-                        Optimize
-                      </Button>
-                    </Box>
+                    <Button
+                      component={Link}
+                      href="/dashboard/upload"
+                      variant="contained"
+                      startIcon={<CloudUploadIcon />}
+                      sx={{
+                        borderRadius: 2,
+                        fontWeight: 700,
+                        background: "linear-gradient(135deg, #6D5EF7 0%, #8B5CF6 100%)",
+                      }}
+                    >
+                      Upload Resume
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                getAnalysesList().map((scan) => (
+                  <TableRow
+                    key={scan.id}
+                    sx={{
+                      transition: "background-color 0.15s ease",
+                      "&:hover": { backgroundColor: "action.hover" },
+                      "&:last-child td, &:last-child th": { border: 0 },
+                    }}
+                  >
+                    <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <DescriptionIcon sx={{ color: "primary.main", fontSize: 20 }} />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
+                          {scan.resumeName}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+
+                    <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "text.primary" }}>
+                        {scan.role}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        {scan.company}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "success.main" }}>
+                        {scan.matchScore}%
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Chip
+                        label={scan.status}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        sx={{ fontWeight: 700, fontSize: "0.75rem" }}
+                      />
+                    </TableCell>
+
+                    <TableCell sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Typography variant="body2" sx={{ color: "text.secondary", fontSize: "0.875rem" }}>
+                        {scan.date}
+                      </Typography>
+                    </TableCell>
+
+                    <TableCell align="right" sx={{ py: 2, px: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            const selected = resumesList?.find((r) => r.id === scan.id);
+                            if (selected) setPreviewResume(selected);
+                          }}
+                          startIcon={<DescriptionIcon fontSize="small" />}
+                          sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600, whiteSpace: "nowrap" }}
+                        >
+                          Preview Resume
+                        </Button>
+                        <Button
+                          component={Link}
+                          href={`/dashboard/upload?reupload=${scan.id}`}
+                          size="small"
+                          variant="contained"
+                          startIcon={<CloudUploadIcon fontSize="small" />}
+                          sx={{
+                            borderRadius: 2,
+                            textTransform: "none",
+                            fontWeight: 700,
+                            background: "linear-gradient(135deg, #6D5EF7 0%, #8B5CF6 100%)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          Re-upload
+                        </Button>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          disabled={deletingId !== null}
+                          onClick={() => {
+                            setResumeToDelete({ id: scan.id, name: scan.resumeName });
+                            setDeleteConfirmOpen(true);
+                          }}
+                        >
+                          {deletingId === scan.id ? (
+                            <CircularProgress size={20} color="error" />
+                          ) : (
+                            <DeleteOutlineIcon fontSize="small" />
+                          )}
+                        </IconButton>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
+
+        {/* Parse Preview Modal */}
+        <Dialog open={previewResume !== null} onClose={() => setPreviewResume(null)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            Parsed Section Breakdown
+            <IconButton size="small" onClick={() => setPreviewResume(null)}>
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2.5}>
+              <Box>
+                <Chip label="Summary" size="small" color="primary" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {previewResume?.structured_sections?.summary || "No summary section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Experience" size="small" color="info" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {previewResume?.structured_sections?.experience || "No work experience section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Education" size="small" color="warning" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {previewResume?.structured_sections?.education || "No education section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Technical Skills" size="small" color="secondary" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {previewResume?.structured_sections?.skills || "No skills section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Certifications" size="small" color="success" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {previewResume?.structured_sections?.certifications || "No certifications section detected."}
+                </Typography>
+              </Box>
+
+              {previewResume?.structured_sections?.other && (
+                <Box>
+                  <Chip label="Other Content" size="small" color="default" sx={{ fontWeight: 700, mb: 1 }} />
+                  <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                    {previewResume.structured_sections.other}
+                  </Typography>
+                </Box>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button onClick={() => setPreviewResume(null)} variant="contained" sx={{ borderRadius: 2 }}>
+              Close Preview
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteConfirmOpen} onClose={() => !deletingId && setDeleteConfirmOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 800 }}>Delete Resume / Scan</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Are you sure you want to permanently delete the resume <strong>{resumeToDelete?.name}</strong> and all its associated scan history?
+            </Typography>
+            <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+              This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => setDeleteConfirmOpen(false)}
+              disabled={deletingId !== null}
+              variant="outlined"
+              sx={{ borderRadius: 2 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteConfirm}
+              disabled={deletingId !== null}
+              color="error"
+              variant="contained"
+              sx={{ borderRadius: 2 }}
+            >
+              {deletingId !== null ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Success Snackbar */}
+        <Snackbar
+          open={!!successMessage}
+          autoHideDuration={4000}
+          onClose={() => setSuccessMessage("")}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        >
+          <Alert onClose={() => setSuccessMessage("")} severity="success" sx={{ width: "100%", borderRadius: 2 }}>
+            {successMessage}
+          </Alert>
+        </Snackbar>
+
+        {/* Error Snackbar */}
+        <Snackbar
+          open={!!errorMessage}
+          autoHideDuration={4000}
+          onClose={() => setErrorMessage("")}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        >
+          <Alert onClose={() => setErrorMessage("")} severity="error" sx={{ width: "100%", borderRadius: 2 }}>
+            {errorMessage}
+          </Alert>
+        </Snackbar>
       </Container>
     </Box>
   );

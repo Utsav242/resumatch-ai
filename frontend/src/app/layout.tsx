@@ -3,7 +3,9 @@ import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { MuiThemeRegistry } from "@/components/providers/MuiThemeRegistry";
+import Providers from "./providers";
 import "./globals.css";
+
 
 const inter = Inter({
   subsets: ["latin"],
@@ -68,7 +70,9 @@ export default function RootLayout({
       >
         <body className="min-h-screen bg-bg text-text-primary antialiased">
           <ThemeProvider defaultTheme="dark">
-            <MuiThemeRegistry>{children}</MuiThemeRegistry>
+            <MuiThemeRegistry>
+              <Providers>{children}</Providers>
+            </MuiThemeRegistry>
           </ThemeProvider>
         </body>
       </html>
