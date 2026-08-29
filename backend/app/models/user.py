@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.resume import Resume
 
 
 class User(Base):
@@ -21,3 +24,8 @@ class User(Base):
     enable_rag: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     strict_ats: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Relationships
+    resumes: Mapped[list["Resume"]] = relationship(
+        "Resume", back_populates="user", cascade="all, delete-orphan"
+    )

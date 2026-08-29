@@ -44,8 +44,6 @@ class Settings(BaseSettings):
     CLERK_API_URL: str = "https://api.clerk.com/v1"
     CLERK_SECRET_KEY: str = "sk_test_1NgErj2WpkqyenjACnak3ud0gEIfuGpkAFKq27bBti"
 
-
-
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=True, extra="ignore"
     )

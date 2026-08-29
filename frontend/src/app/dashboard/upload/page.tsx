@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { ResumeData } from "@/types";
 import {
   Container,
   Box,
@@ -14,8 +16,6 @@ import {
   TextField,
   Chip,
   Paper,
-  Tabs,
-  Tab,
   LinearProgress,
   Dialog,
   DialogTitle,
@@ -24,33 +24,71 @@ import {
   IconButton,
   Alert,
   Stack,
+  CircularProgress,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionIcon from "@mui/icons-material/Description";
 import { AppNav } from "@/components/common/AppNav";
+import { ApiService } from "@/services/api";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 
 export default function UploadPage(): React.JSX.Element {
   const router = useRouter();
-  const [tabIndex, setTabIndex] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; type: string } | null>({
-    name: "Alex_Rivera_Senior_Architect_Resume.pdf",
-    size: "1.4 MB",
-    type: "application/pdf",
-  });
-  const [jobDescription, setJobDescription] = useState(
-    "We are seeking a Staff AI Infrastructure Architect to lead vector RAG retrieval pipelines, fine-tune LLMs, design high-throughput FastAPI microservices, and optimize ATS keyword density..."
-  );
-  const [targetRole, setTargetRole] = useState("Staff AI Infrastructure Architect");
-  const [targetCompany, setTargetCompany] = useState("Anthropic / OpenAI");
+  const searchParams = useSearchParams();
+  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
 
+  const reuploadId = searchParams.get("reupload");
+  
+  // Resume states
+  const [resumeFileDetails, setResumeFileDetails] = useState<{ name: string; size: string; type: string } | null>(null);
+  const [parsedResumeData, setParsedResumeData] = useState<ResumeData | null>(null);
+  const [resumeUploading, setResumeUploading] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+
+  // Job Description states
+  const [pastedJobDescription, setPastedJobDescription] = useState("");
+  const [jdError, setJdError] = useState<string | null>(null);
+
+  // General Job Details
+  const [targetRole, setTargetRole] = useState("");
+  const [targetCompany, setTargetCompany] = useState("");
+
+  // Scan states
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+
+  // Fetch specific resume for re-upload if query param is set
+  const { data: reuploadResume } = useQuery<ResumeData | null>({
+    queryKey: ["reupload-resume", reuploadId],
+    queryFn: async () => {
+      if (!reuploadId) return null;
+      const token = await getToken();
+      if (!token) throw new Error("No authentication token available");
+      return ApiService.fetchResumeById(token, reuploadId);
+    },
+    enabled: !!reuploadId,
+  });
+
+  useEffect(() => {
+    if (reuploadResume) {
+      setParsedResumeData(reuploadResume);
+      setResumeFileDetails({
+        name: reuploadResume.file_metadata.filename,
+        size: formatBytes(reuploadResume.file_metadata.file_size),
+        type: reuploadResume.file_metadata.content_type,
+      });
+      setTargetRole(reuploadResume.target_role || "");
+      setTargetCompany(reuploadResume.target_company || "");
+      setPastedJobDescription(reuploadResume.job_description_text || "");
+    }
+  }, [reuploadResume]);
 
   const scanStages = [
     "Parsing PDF document structure & work history...",
@@ -59,45 +97,137 @@ export default function UploadPage(): React.JSX.Element {
     "Finalizing RAG citations and LLM improvement recommendations...",
   ];
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  // Helper to format file size
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  // Helper for Clerk Auth API execution
+  const executeWithAuth = async <T,>(apiCall: (token: string) => Promise<T>): Promise<T> => {
+    const token = await getToken();
+    if (!token) {
+      throw new Error("User session expired. Please sign in again.");
+    }
+    return apiCall(token);
+  };
+
+
+  // ==========================================
+  // RESUME UPLOAD HANDLERS
+  // ==========================================
+  const handleResumeFile = async (file: File) => {
+    setResumeError(null);
+    
+    // Validate File Size (10MB)
+    if (file.size > MAX_FILE_SIZE) {
+      setResumeError("Resume file exceeds 10MB limit.");
+      return;
+    }
+
+    // Validate File Type
+    const allowedTypes = [
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+    const extension = file.name.slice(((file.name.lastIndexOf(".") - 1) >>> 0) + 2).toLowerCase();
+    const isAllowedExt = extension === "pdf" || extension === "docx";
+
+    if (!allowedTypes.includes(file.type) && !isAllowedExt) {
+      setResumeError("Unsupported format. Only PDF and DOCX files are allowed.");
+      return;
+    }
+
+    // Call API
+    setResumeUploading(true);
+    try {
+      const parsedResume = await executeWithAuth((token) => ApiService.uploadResume(token, file));
+      setParsedResumeData(parsedResume);
+      setResumeFileDetails({
+        name: file.name,
+        size: formatBytes(file.size),
+        type: file.type || (extension === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+      });
+      queryClient.invalidateQueries({ queryKey: ["active-resume"] });
+      queryClient.invalidateQueries({ queryKey: ["resumes-list"] });
+    } catch (err: unknown) {
+
+      const errorMsg = err instanceof Error ? err.message : "Failed to upload and parse resume.";
+      setResumeError(errorMsg);
+      setParsedResumeData(null);
+      setResumeFileDetails(null);
+    } finally {
+      setResumeUploading(false);
+    }
+  };
+
+  const handleResumeDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      setSelectedFile({
-        name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: file.type,
-      });
+      handleResumeFile(e.dataTransfer.files[0]);
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleResumeFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile({
-        name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: file.type,
-      });
+      handleResumeFile(e.target.files[0]);
     }
   };
 
-  const startScan = () => {
+  const handleResumeReset = () => {
+    setResumeFileDetails(null);
+    setParsedResumeData(null);
+    setResumeError(null);
+  };
+
+  // ==========================================
+  // ==========================================
+  // SCAN ORCHESTRATION
+  // ==========================================
+  const startScan = async () => {
+    if (!parsedResumeData || !pastedJobDescription.trim()) return;
+
+    setJdError(null);
+    setResumeError(null);
     setIsScanning(true);
     setScanStep(0);
 
-    const interval = setInterval(() => {
-      setScanStep((prev) => {
-        if (prev >= scanStages.length - 1) {
-          clearInterval(interval);
-          setTimeout(() => {
-            router.push("/report/sample");
-          }, 800);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 1000);
+    try {
+      // Validate & normalize pasted Job Description with the backend and create scan record
+      await executeWithAuth((token) =>
+        ApiService.pasteJobDescription(token, {
+          text: pastedJobDescription,
+          target_role: targetRole || undefined,
+          target_company: targetCompany || undefined,
+          resume_id: parsedResumeData.id,
+        })
+      );
+
+      // Invalidate queries so that dashboard/history show the updated scan immediately
+      await queryClient.invalidateQueries({ queryKey: ["active-resume"] });
+      await queryClient.invalidateQueries({ queryKey: ["resumes-list"] });
+
+      // Run visual scanner animation stages
+      const interval = setInterval(() => {
+        setScanStep((prev) => {
+          if (prev >= scanStages.length - 1) {
+            clearInterval(interval);
+            setTimeout(() => {
+              router.push("/report/sample");
+            }, 800);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (err: unknown) {
+      setIsScanning(false);
+      const errorMsg = err instanceof Error ? err.message : "Failed to submit job description.";
+      setJdError(errorMsg);
+    }
   };
 
   return (
@@ -127,10 +257,38 @@ export default function UploadPage(): React.JSX.Element {
                   Drag and drop your PDF or DOCX file (Max 10MB).
                 </Typography>
 
-                {!selectedFile ? (
+                {resumeError && (
+                  <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                    {resumeError}
+                  </Alert>
+                )}
+
+                {resumeUploading ? (
+                  <Box
+                    sx={{
+                      border: "2px dashed",
+                      borderColor: "primary.main",
+                      borderRadius: 3,
+                      p: 4,
+                      textAlign: "center",
+                      backgroundColor: "action.hover",
+                      flexGrow: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 2,
+                    }}
+                  >
+                    <CircularProgress size={40} />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      Parsing resume text & sections...
+                    </Typography>
+                  </Box>
+                ) : !resumeFileDetails ? (
                   <Box
                     onDragOver={(e) => e.preventDefault()}
-                    onDrop={handleDrop}
+                    onDrop={handleResumeDrop}
                     sx={{
                       border: "2px dashed",
                       borderColor: "primary.main",
@@ -152,9 +310,9 @@ export default function UploadPage(): React.JSX.Element {
                   >
                     <input
                       type="file"
-                      accept=".pdf,.docx,.txt"
+                      accept=".pdf,.docx"
                       id="resume-file-input"
-                      onChange={handleFileInput}
+                      onChange={handleResumeFileInput}
                       style={{ display: "none" }}
                     />
                     <label htmlFor="resume-file-input" style={{ cursor: "pointer", width: "100%" }}>
@@ -163,7 +321,7 @@ export default function UploadPage(): React.JSX.Element {
                         Click or Drag File Here to Upload
                       </Typography>
                       <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5 }}>
-                        Supports PDF, DOCX, TXT formats
+                        Supports PDF and DOCX formats
                       </Typography>
                     </label>
                   </Box>
@@ -184,32 +342,34 @@ export default function UploadPage(): React.JSX.Element {
                         <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "primary.main", color: "#FFF" }}>
                           <InsertDriveFileIcon />
                         </Box>
-                        <Box>
+                        <Box sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                            {selectedFile.name}
+                            {resumeFileDetails.name}
                           </Typography>
                           <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                            {selectedFile.size} • Verified Format
+                            {resumeFileDetails.size} • Verified Format
                           </Typography>
                         </Box>
                       </Box>
 
-                      <IconButton size="small" color="error" onClick={() => setSelectedFile(null)}>
+                      <IconButton size="small" color="error" onClick={handleResumeReset}>
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Box>
 
-                    <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<DescriptionIcon fontSize="small" />}
-                        onClick={() => setShowPreviewModal(true)}
-                        sx={{ borderRadius: 2 }}
-                      >
-                        Preview Parsed Sections
-                      </Button>
-                    </Box>
+                    {parsedResumeData && (
+                      <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<DescriptionIcon fontSize="small" />}
+                          onClick={() => setShowPreviewModal(true)}
+                          sx={{ borderRadius: 2 }}
+                        >
+                          Preview Parsed Sections
+                        </Button>
+                      </Box>
+                    )}
                   </Paper>
                 )}
               </CardContent>
@@ -224,57 +384,54 @@ export default function UploadPage(): React.JSX.Element {
                   2. Target Job Parameters
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-                  Paste the target posting description to extract key requirements.
+                  Paste or upload the target posting description to extract key requirements.
                 </Typography>
 
-                <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} sx={{ mb: 2 }}>
-                  <Tab label="Paste Text" sx={{ fontWeight: 700 }} />
-                  <Tab label="LinkedIn / URL Import" sx={{ fontWeight: 700 }} />
-                </Tabs>
-
-                {tabIndex === 0 ? (
-                  <Box>
-                    <TextField
-                      fullWidth
-                      label="Target Role Title"
-                      value={targetRole}
-                      onChange={(e) => setTargetRole(e.target.value)}
-                      size="small"
-                      sx={{ mb: 2 }}
-                    />
-                    <TextField
-                      fullWidth
-                      label="Company Name"
-                      value={targetCompany}
-                      onChange={(e) => setTargetCompany(e.target.value)}
-                      size="small"
-                      sx={{ mb: 2 }}
-                    />
-                    <TextField
-                      fullWidth
-                      multiline
-                      rows={5}
-                      label="Job Description"
-                      value={jobDescription}
-                      onChange={(e) => setJobDescription(e.target.value)}
-                      placeholder="Paste the full job posting here..."
-                    />
-                  </Box>
-                ) : (
-                  <Box sx={{ py: 2 }}>
-                    <TextField fullWidth label="Job Posting URL" placeholder="https://www.linkedin.com/jobs/view/..." size="small" sx={{ mb: 2 }} />
-                    <Alert severity="info" sx={{ borderRadius: 2 }}>
-                      Resumiq will automatically scrape and extract target skills from supported job portals.
-                    </Alert>
-                  </Box>
+                {jdError && (
+                  <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                    {jdError}
+                  </Alert>
                 )}
+
+                <Box sx={{ mt: 1 }}>
+                  <TextField
+                    fullWidth
+                    label="Target Role Title"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Company Name"
+                    value={targetCompany}
+                    onChange={(e) => setTargetCompany(e.target.value)}
+                    size="small"
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    label="Job Description"
+                    value={pastedJobDescription}
+                    onChange={(e) => setPastedJobDescription(e.target.value)}
+                    placeholder="Paste the full job posting here..."
+                  />
+                </Box>
+
 
                 <Button
                   fullWidth
                   variant="contained"
                   size="large"
                   onClick={startScan}
-                  disabled={isScanning || !selectedFile || !jobDescription}
+                  disabled={
+                    isScanning ||
+                    !parsedResumeData ||
+                    !pastedJobDescription.trim()
+                  }
                   startIcon={<AutoAwesomeIcon />}
                   sx={{
                     mt: 3,
@@ -324,29 +481,47 @@ export default function UploadPage(): React.JSX.Element {
             <Stack spacing={2.5}>
               <Box>
                 <Chip label="Summary" size="small" color="primary" sx={{ fontWeight: 700, mb: 1 }} />
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Staff AI Architect with 8+ years leading production LLM deployments, RAG retrieval pipelines, and distributed vector stores...
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {parsedResumeData?.structured_sections?.summary || "No summary section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Experience" size="small" color="info" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {parsedResumeData?.structured_sections?.experience || "No work experience section detected."}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Chip label="Education" size="small" color="warning" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {parsedResumeData?.structured_sections?.education || "No education section detected."}
                 </Typography>
               </Box>
 
               <Box>
                 <Chip label="Technical Skills" size="small" color="secondary" sx={{ fontWeight: 700, mb: 1 }} />
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-                  {["Python", "PyTorch", "FastAPI", "PostgreSQL", "RAG", "FAISS", "LangChain", "Kubernetes", "TypeScript"].map((sk, idx) => (
-                    <Chip key={idx} label={sk} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
-                  ))}
-                </Box>
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {parsedResumeData?.structured_sections?.skills || "No skills section detected."}
+                </Typography>
               </Box>
 
               <Box>
-                <Chip label="Experience (Extracted)" size="small" color="info" sx={{ fontWeight: 700, mb: 1 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  Lead AI Architect — TechScale Inc (2022 - Present)
-                </Typography>
-                <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  • Architected real-time RAG pipeline handling 12M vector search requests daily with 45ms latencies.
+                <Chip label="Certifications" size="small" color="success" sx={{ fontWeight: 700, mb: 1 }} />
+                <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                  {parsedResumeData?.structured_sections?.certifications || "No certifications section detected."}
                 </Typography>
               </Box>
+
+              {parsedResumeData?.structured_sections?.other && (
+                <Box>
+                  <Chip label="Other Content" size="small" color="default" sx={{ fontWeight: 700, mb: 1 }} />
+                  <Typography variant="body2" sx={{ color: "text.secondary", whiteSpace: "pre-wrap" }}>
+                    {parsedResumeData.structured_sections.other}
+                  </Typography>
+                </Box>
+              )}
             </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>
